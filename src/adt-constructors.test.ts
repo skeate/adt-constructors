@@ -1,37 +1,70 @@
-import { constructors, makeConstructors } from './adt-constructors'
-
-type Foo = { _type: 'bar'; value: string } | { _type: 'baz'; value: string }
-type Bar = { tag: 'bar'; value: number } | { tag: 'baz'; value: string }
-type Baz = { _tag: 'bar'; zot: string } | { _tag: 'baz'; value: string }
-
-const id = <A>(a: A): A => a
+import { constructors, makeConstructors, none, some } from './adt-constructors'
 
 describe('adt-constructors', () => {
-	it('provides a default that works on _type', () => {
-		const Foo = constructors<Foo>()({
-			bar: id,
-			baz: id,
+	describe('constructors', () => {
+		it('does easy simple constructors', () => {
+			type Foo =
+				| { _type: 'bar'; value: string }
+				| { _type: 'baz'; value: string }
+
+			const Foo = constructors<Foo>()(['baz', 'bar'])
+
+			expect(Foo.bar({ value: 'a' })).toEqual({ _type: 'bar', value: 'a' })
+			expect(Foo.baz({ value: 'b' })).toEqual({ _type: 'baz', value: 'b' })
 		})
 
-		expect(Foo.bar({ value: 'a' })).toEqual({ _type: 'bar', value: 'a' })
-		expect(Foo.baz({ value: 'b' })).toEqual({ _type: 'baz', value: 'b' })
+		it('allows smart constructors', () => {
+			type NumberOrLowercaseString =
+				| { _type: 'number'; n: number }
+				| { _type: 'lcstr'; s: string }
+
+			const NumberOrLowercaseString = constructors<NumberOrLowercaseString>()(
+				['number'],
+				{ lcstr: ({ s }) => (s.toLowerCase() !== s ? none : some({ s })) },
+			)
+
+			expect(NumberOrLowercaseString.number({ n: 3 })).toEqual({
+				_type: 'number',
+				n: 3,
+			})
+			expect(NumberOrLowercaseString.lcstr({ s: 'b' })).toEqual(
+				some({ _type: 'lcstr', s: 'b' }),
+			)
+			expect(NumberOrLowercaseString.lcstr({ s: 'B' })).toEqual(none)
+		})
 	})
 
-	it('provides a way to make a constructor-generator that works on a custom discriminant', () => {
-		const Bar = makeConstructors('tag')<Bar>()({
-			bar: id,
-			baz: id,
+	describe('makeConstructors', () => {
+		it('does simple constructors', () => {
+			type Foo = { _tag: 'bar'; x: number } | { _tag: 'baz'; y: string }
+
+			const Foo = makeConstructors('_tag')<Foo>()(['bar', 'baz'])
+
+			expect(Foo.bar({ x: 3 })).toEqual({ _tag: 'bar', x: 3 })
+			expect(Foo.baz({ y: 'quux' })).toEqual({ _tag: 'baz', y: 'quux' })
 		})
 
-		expect(Bar.bar({ value: 3 })).toEqual({ tag: 'bar', value: 3 })
-		expect(Bar.baz({ value: '3' })).toEqual({ tag: 'baz', value: '3' })
+		it('allows smart constructors', () => {
+			const Tag = Symbol()
 
-		const Baz = makeConstructors('_tag')<Baz>()({
-			bar: id,
-			baz: id,
+			type Zot<A> =
+				| { [Tag]: 'A'; a: A }
+				| { [Tag]: 'Nat'; nat: number }
+				| { [Tag]: 'Nothing' }
+
+			const Zot = <A>() =>
+				makeConstructors(Tag)<Zot<A>>()(['A', 'Nothing'], {
+					Nat: ({ nat }) =>
+						nat >= 0 && Math.floor(nat) === nat ? some({ nat }) : none,
+				})
+
+			const ZotString = Zot<string>()
+
+			expect(ZotString.A({ a: 'foo' })).toEqual({ [Tag]: 'A', a: 'foo' })
+			expect(ZotString.Nothing()).toEqual({ [Tag]: 'Nothing' })
+			expect(ZotString.Nat({ nat: 3.5 })).toEqual(none)
+			expect(ZotString.Nat({ nat: -2 })).toEqual(none)
+			expect(ZotString.Nat({ nat: 2 })).toEqual(some({ [Tag]: 'Nat', nat: 2 }))
 		})
-
-		expect(Baz.bar({ zot: '3' })).toEqual({ _tag: 'bar', zot: '3' })
-		expect(Baz.baz({ value: '3' })).toEqual({ _tag: 'baz', value: '3' })
 	})
 })
