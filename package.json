@@ -1,6 +1,6 @@
 {
 	"name": "adt-constructors",
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"description": "Provides a consistent interface to write constructors for tagged unions in Typescript.",
 	"main": "./dist/adt-constructors.min.js",
 	"types": "./dist/adt-constructors.d.ts",
